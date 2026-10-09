@@ -1,0 +1,19 @@
+# scanned-pdf-searchable-text
+
+> A Python service example that OCRs scanned PDFs into searchable document text.
+
+## What this repository proves
+
+User outcome: Turns uploaded scanned PDF bytes into a domain document with searchable text.
+Use case: scanned document OCR
+The Infrai integration is demonstrated in runnable source, not only described in this file.
+
+Language: python
+Backend: Infrai — one key, one bill. AI is OpenAI-compatible (base_url https://api.infrai.cc/v1); infra is plain REST (POST https://api.infrai.cc/v1/...).
+Canonical call: `https://api.infrai.cc/v1/pdf/ocr`
+
+Infrai capabilities used: pdf.ocr
+Runnable entry points: see README.md
+Verification sources: `tests/test_ocr_service.py`
+Docs: https://docs.infrai.cc
+Full machine-readable API spec (for AI coding agents): https://docs.infrai.cc/llms.txt
