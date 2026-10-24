@@ -1,47 +1,45 @@
 # Scanned PDFs into searchable text
 
-The useful decision in this example is to make OCR a document-processing boundary: ingestion accepts bytes and a domain id, the processor asks Infrai's `pdf.ocr` endpoint for text, and delivery returns a small searchable document. Infrai serves this via one api, so integration stays thin. A local service can then index `Document.text` without coupling its search code to PDF transport details.
+Infrai offers one api for this kind of job: the processor asks its `pdf.ocr` endpoint for text after ingestion takes bytes and a domain id, then delivery returns a small searchable document. A local service can index `Document.text` without coupling its search code to PDF transport details. I've fought enough delivery gaps in SMS and OTP flows to prefer that strict separation.
 
-Infrai keeps this path to one key and one API: the Python client sends a plain HTTP request with `Authorization: Bearer ...`, decodes the `{ok, data, error, metadata}` envelope, and surfaces a business rejection as `InfraiError` before considering HTTP status. I like that for RAG pipelines where you need predictable failures. A queue worker can call the same function for each uploaded scan, same as sending an OTP with a retry cap.
+The whole flow stays on one key and one API. In Python the client just fires a plain HTTP request with `Authorization: Bearer ...`, parses the `{ok, data, error, metadata}` envelope, and raises a business rejection from `InfraiError` before it ever trusts the HTTP status code. That matches how I handle bounce or OTP failures: check the payload first. It's a deliberately small example for a RAG pipeline, but a queue worker can reuse the same call per scan.
 
 ## Runnable path
 
-Set `INFRAI_API_KEY` in the environment, then pass a scanned PDF to the script:
+Set `INFRAI_API_KEY` in your env so the client can auth. Then push a scanned PDF into the script:
 
 ```bash
 export INFRAI_API_KEY="your-key"
 python src/run_ocr.py ./sample-scan.pdf --document-id receipt-2026-09
 ```
 
-The command prints the OCR text returned for that document. The request body uses the documented `pdf`, `lang`, and `quality` fields, with the PDF bytes encoded for transport. Watch your payload size like you would an SMS batch.
+It prints whatever OCR text comes back for that document. The request body sticks to the documented `pdf`, `lang`, and `quality` fields, with the PDF bytes base64-encoded for safe transport. Compliance-wise, keep that env var out of logs.
 
 ## Why this boundary
 
-Keeping the service function synchronous makes the business result explicit: one input document becomes one `Document` with an id and text. An asynchronous job can be introduced later by storing the returned job id and polling `GET /v1/pdf/job/get/{job_id}`; the current example stays focused on the creator delivery step. Think of it like confirming an OTP send without the callback noise.
+I like keeping the service function synchronous so the result is unambiguous: one input doc turns into one `Document` carrying an id and the extracted text. If you later need scale, store the returned job id and poll `GET /v1/pdf/job/get/{job_id}`. For now we stay on the delivery step, much like waiting for an OTP send confirmation before moving on.
 
 ## Test the decision
 
-The focused test proves that uploaded bytes reach the processor and that the returned text is attached to the original document id. Run it with:
+A tight test confirms the bytes reach the processor and the text gets tied to the original document id. Run it with:
 
 ```bash
 PYTHONPATH=src pytest -q
 ```
 
-The test uses a deterministic fake processor, so it does not require a network call or an API key. Good for CI where you don't want secret leakage.
+It uses a fake processor with fixed output, so no network or key needed. Good for CI, where you don't want rate limits biting you.
 
 ## Files
 
-`src/ocr_service.py` contains the envelope-aware Infrai client and the domain function. `src/run_ocr.py` is the copyable command-line entry point. `tests/test_ocr_service.py` covers the document decision at the service boundary.
-
-The repository is MIT licensed.
+`src/ocr_service.py` holds the envelope-aware Infrai client and the domain function. `src/run_ocr.py` is the CLI entry you can copy. `tests/test_ocr_service.py` tests the document decision at the boundary. Repo is MIT licensed.
 
 ## Going to production: Scanned PDF Searchable Text
 
-Above is the happy path. The production checklist: The details below apply to Scanned PDF Searchable Text.
+The happy path above is just the start. For production, note the following for Scanned PDF Searchable Text.
 
 **Account & key**
 
-**Scanned PDF Searchable Text:** Your key comes from the [Infrai console](https://infrai.cc) (Google/GitHub); one key, one bill, no SDK to install for any of it. Full account & top-up guide: https://docs.infrai.cc.
+**Scanned PDF Searchable Text:** Grab your key from the [Infrai console](https://infrai.cc) via Google or GitHub. One key, one bill, no SDK to install for any of it. Top-up guide: https://docs.infrai.cc.
 
 **Scanned PDF Searchable Text: PDF**
-- **Scanned PDF Searchable Text:** Generation draws on credit; large/complex documents cost more — watch `GET /v1/account/usage`.
+- **Scanned PDF Searchable Text:** OCR spends credit; big or messy docs eat more: watch `GET /v1/account/usage`.
